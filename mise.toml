@@ -1,0 +1,9 @@
+[tools]
+zig = "latest"
+zls = "latest"
+
+[tasks.watch]
+run = "zig build --watch"
+
+[tasks.run]
+run = "zig build run"
