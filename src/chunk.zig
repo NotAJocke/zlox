@@ -10,7 +10,7 @@ pub const OpCode = enum(u8) {
 pub const Chunk = struct {
     code: std.ArrayList(u8),
     constants: std.ArrayList(Value),
-    lines: std.ArrayList(u32),
+    lines: std.ArrayList(struct { line: u32, repeat: u32 }),
 
     const Self = @This();
 
@@ -24,7 +24,31 @@ pub const Chunk = struct {
 
     pub fn write(self: *Self, alloc: std.mem.Allocator, code: u8, line: u32) !void {
         try self.code.append(alloc, code);
-        try self.lines.append(alloc, line);
+
+        if (self.lines.items.len > 0) {
+            const last = &self.lines.items[self.lines.items.len - 1];
+
+            if (last.line == line) {
+                last.repeat += 1;
+                return;
+            }
+        }
+
+        try self.lines.append(alloc, .{ .line = line, .repeat = 1 });
+    }
+
+    pub fn getLine(self: *Self, code_index: usize) u32 {
+        var index = code_index;
+
+        for (self.lines.items) |compressed| {
+            if (index < compressed.repeat) {
+                return compressed.line;
+            }
+
+            index -= compressed.repeat;
+        }
+
+        unreachable;
     }
 
     pub fn writeOp(self: *Self, alloc: std.mem.Allocator, code: OpCode, line: u32) !void {
@@ -44,10 +68,10 @@ pub const Chunk = struct {
         while (offset < self.code.items.len) {
             std.debug.print("{d:0>4} ", .{offset});
 
-            if (offset > 0 and self.lines.items[offset] == self.lines.items[offset - 1]) {
+            if (offset > 0 and self.getLine(offset) == self.getLine(offset - 1)) {
                 std.debug.print("   | ", .{});
             } else {
-                std.debug.print("{d:>4} ", .{self.lines.items[offset]});
+                std.debug.print("{d:>4} ", .{self.getLine(offset)});
             }
 
             const rawOp = self.code.items[offset];
@@ -66,7 +90,4 @@ pub const Chunk = struct {
             }
         }
     }
-
-    // fn disassembleInstruction(self: *Self, )
-
 };
