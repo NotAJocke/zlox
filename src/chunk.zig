@@ -4,6 +4,11 @@ const Value = @import("value.zig").Value;
 
 pub const OpCode = enum(u8) {
     CONSTANT,
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
+    NEGATE,
     RETURN,
 };
 
@@ -22,8 +27,12 @@ pub const Chunk = struct {
         self.lines.deinit(alloc);
     }
 
-    pub fn write(self: *Self, alloc: std.mem.Allocator, code: u8, line: u32) !void {
-        try self.code.append(alloc, code);
+    pub fn write(self: *Self, alloc: std.mem.Allocator, code: OpCode, line: u32) !void {
+        try self.writeConstant(alloc, @intFromEnum(code), line);
+    }
+
+    pub fn writeConstant(self: *Self, alloc: std.mem.Allocator, constant: u8, line: u32) !void {
+        try self.code.append(alloc, constant);
 
         if (self.lines.items.len > 0) {
             const last = &self.lines.items[self.lines.items.len - 1];
@@ -51,10 +60,6 @@ pub const Chunk = struct {
         unreachable;
     }
 
-    pub fn writeOp(self: *Self, alloc: std.mem.Allocator, code: OpCode, line: u32) !void {
-        try self.write(alloc, @intFromEnum(code), line);
-    }
-
     pub fn addConstant(self: *Self, alloc: std.mem.Allocator, value: Value) !usize {
         const index = self.constants.items.len;
         try self.constants.append(alloc, value);
@@ -64,30 +69,54 @@ pub const Chunk = struct {
     pub fn disassemble(self: *Self, name: []const u8) void {
         std.debug.print("== {s} ==\n", .{name});
 
-        var offset: u8 = 0;
+        var offset: usize = 0;
         while (offset < self.code.items.len) {
-            std.debug.print("{d:0>4} ", .{offset});
+            offset = self.disassembleInstruction(offset);
+        }
+    }
 
-            if (offset > 0 and self.getLine(offset) == self.getLine(offset - 1)) {
-                std.debug.print("   | ", .{});
-            } else {
-                std.debug.print("{d:>4} ", .{self.getLine(offset)});
-            }
+    pub fn disassembleInstruction(self: *Self, offset: usize) usize {
+        std.debug.print("{d:0>4} ", .{offset});
 
-            const rawOp = self.code.items[offset];
-            const op: OpCode = @enumFromInt(rawOp);
+        if (offset > 0 and self.getLine(offset) == self.getLine(offset - 1)) {
+            std.debug.print("   | ", .{});
+        } else {
+            std.debug.print("{d:>4} ", .{self.getLine(offset)});
+        }
 
-            switch (op) {
-                .RETURN => {
-                    std.debug.print("{s}\n", .{"OP_RETURN"});
-                    offset += 1;
-                },
-                .CONSTANT => {
-                    const constant = self.code.items[offset + 1];
-                    std.debug.print("{s:<16} {d:>4} '{any}'\n", .{ "OP_CONSTANT", constant, self.constants.items[constant] });
-                    offset += 2;
-                },
-            }
+        const rawOp = self.code.items[offset];
+        const op: OpCode = @enumFromInt(rawOp);
+
+        switch (op) {
+            .RETURN => {
+                std.debug.print("{s}\n", .{"OP_RETURN"});
+                return offset + 1;
+            },
+            .ADD => {
+                std.debug.print("{s}\n", .{"OP_ADD"});
+                return offset + 1;
+            },
+            .SUBTRACT => {
+                std.debug.print("{s}\n", .{"OP_SUBTRACT"});
+                return offset + 1;
+            },
+            .MULTIPLY => {
+                std.debug.print("{s}\n", .{"OP_MULTIPLY"});
+                return offset + 1;
+            },
+            .DIVIDE => {
+                std.debug.print("{s}\n", .{"OP_DIVIDE"});
+                return offset + 1;
+            },
+            .NEGATE => {
+                std.debug.print("{s}\n", .{"OP_NEGATE"});
+                return offset + 1;
+            },
+            .CONSTANT => {
+                const constant = self.code.items[offset + 1];
+                std.debug.print("{s:<16} {d:>4} '{any}'\n", .{ "OP_CONSTANT", constant, self.constants.items[constant] });
+                return offset + 2;
+            },
         }
     }
 };
