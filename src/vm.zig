@@ -4,6 +4,7 @@ const modchunk = @import("chunk.zig");
 const Chunk = modchunk.Chunk;
 const OpCode = modchunk.OpCode;
 const Value = @import("value.zig").Value;
+const compile = @import("compiler.zig").compile;
 
 pub const VmError = error{
     Compile,
@@ -34,12 +35,15 @@ pub const VM = struct {
         return self.stackTop[0];
     }
 
-    pub fn interpret(self: *Self, chunk: *Chunk) VmError!void {
-        self.resetStack();
+    pub fn interpret(self: *Self, source: []const u8) VmError!void {
+        _ = self;
+        // self.resetStack();
 
-        self.chunk = chunk;
-        self.ip = chunk.code.items.ptr;
-        return self.run();
+        compile(source);
+
+        // self.chunk = chunk;
+        // self.ip = chunk.code.items.ptr;
+        // return self.run();
     }
 
     fn read_byte(self: *Self) u8 {

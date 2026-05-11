@@ -6,45 +6,43 @@ const OpCode = @import("chunk.zig").OpCode;
 
 const VM = @import("vm.zig").VM;
 
-pub fn main() !void {
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
+fn repl(io: std.Io) !void {
+    var vm = VM{};
 
-    defer {
-        const status = gpa.deinit();
-        if (status == .leak) {
-            _ = gpa.detectLeaks();
-        }
+    const stdIn = std.Io.File.stdin();
+    var buffer: [1024]u8 = undefined;
+    var reader = stdIn.reader(io, &buffer);
+
+    while (true) {
+        std.debug.print("> ", .{});
+        const data = reader.interface.takeDelimiterInclusive('\n') catch {
+            std.debug.print("\n", .{});
+            return;
+        };
+
+        try vm.interpret(data);
     }
+}
 
-    const allocator = gpa.allocator();
+fn runFile(io: std.Io, filename: [:0]const u8, allocator: std.mem.Allocator) !void {
+    var vm = VM{};
 
-    var c: Chunk = .empty;
-    defer c.deinit(allocator);
+    const cwd = std.Io.Dir.cwd();
+    const content = try cwd.readFileAlloc(io, filename, allocator, Io.Limit.unlimited);
 
-    var constant = try c.addConstant(allocator, 1.2);
-    try c.write(allocator, .CONSTANT, 123);
-    try c.writeConstant(allocator, @intCast(constant), 123);
+    try vm.interpret(content);
+}
 
-    constant = try c.addConstant(allocator, 3.4);
-    try c.write(allocator, .CONSTANT, 123);
-    try c.writeConstant(allocator, @intCast(constant), 123);
+pub fn main(init: std.process.Init) !void {
+    const arena_alloc = init.arena.allocator();
+    const args = try init.minimal.args.toSlice(arena_alloc);
 
-    try c.write(allocator, .ADD, 123);
-
-    constant = try c.addConstant(allocator, 5.6);
-    try c.write(allocator, .CONSTANT, 123);
-    try c.writeConstant(allocator, @intCast(constant), 123);
-
-    try c.write(allocator, .DIVIDE, 123);
-    try c.write(allocator, .NEGATE, 123);
-
-    try c.write(allocator, .RETURN, 123);
-
-    // c.disassemble("test chunk");
-
-    std.debug.print("\n== Execution ==\n", .{});
-
-    var vm = VM{ .debug = true };
-
-    try vm.interpret(&c);
+    if (args.len == 1) {
+        try repl(init.io);
+    } else if (args.len == 2) {
+        try runFile(init.io, args[1], arena_alloc);
+    } else {
+        std.debug.print("Usage: zlox [path]\n", .{});
+        std.process.exit(64);
+    }
 }
