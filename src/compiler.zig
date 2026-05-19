@@ -78,6 +78,17 @@ const Parser = struct {
         table[@intFromEnum(TokenType.SLASH)] = .{ .prefix = null, .infix = binary, .precedence = .FACTOR };
         table[@intFromEnum(TokenType.STAR)] = .{ .prefix = null, .infix = binary, .precedence = .FACTOR };
         table[@intFromEnum(TokenType.NUMBER)] = .{ .prefix = number, .infix = null, .precedence = .NONE };
+        table[@intFromEnum(TokenType.FALSE)] = .{ .prefix = literal, .infix = null, .precedence = .NONE };
+        table[@intFromEnum(TokenType.TRUE)] = .{ .prefix = literal, .infix = null, .precedence = .NONE };
+        table[@intFromEnum(TokenType.NIL)] = .{ .prefix = literal, .infix = null, .precedence = .NONE };
+        table[@intFromEnum(TokenType.BANG)] = .{ .prefix = unary, .infix = null, .precedence = .NONE };
+        table[@intFromEnum(TokenType.BANG_EQUAL)] = .{ .prefix = null, .infix = binary, .precedence = .EQUALITY };
+
+        table[@intFromEnum(TokenType.EQUAL_EQUAL)] = .{ .prefix = null, .infix = binary, .precedence = .EQUALITY };
+        table[@intFromEnum(TokenType.GREATER)] = .{ .prefix = null, .infix = binary, .precedence = .COMPARISON };
+        table[@intFromEnum(TokenType.GREATER_EQUAL)] = .{ .prefix = null, .infix = binary, .precedence = .COMPARISON };
+        table[@intFromEnum(TokenType.LESS)] = .{ .prefix = null, .infix = binary, .precedence = .COMPARISON };
+        table[@intFromEnum(TokenType.LESS_EQUAL)] = .{ .prefix = null, .infix = binary, .precedence = .COMPARISON };
 
         break :init_rules table;
     };
@@ -150,6 +161,10 @@ const Parser = struct {
         self.currentChunk.writeConstant(b2, @intCast(self.previous.line));
     }
 
+    pub fn emitBytesOps(self: *Self, op1: OpCode, op2: OpCode) void {
+        self.emitBytes(@intFromEnum(op1), @intFromEnum(op2));
+    }
+
     pub fn emitReturn(self: *Self) void {
         self.emitByte(@intFromEnum(OpCode.RETURN));
     }
@@ -189,6 +204,7 @@ const Parser = struct {
 
         switch (opType) {
             .MINUS => self.emitByteOp(OpCode.NEGATE),
+            .BANG => self.emitByteOp(OpCode.NOT),
             else => unreachable,
         }
     }
@@ -203,12 +219,27 @@ const Parser = struct {
             .MINUS => self.emitByteOp(OpCode.SUBTRACT),
             .STAR => self.emitByteOp(OpCode.MULTIPLY),
             .SLASH => self.emitByteOp(OpCode.DIVIDE),
+            .BANG_EQUAL => self.emitBytesOps(.EQUAL, .NOT),
+            .EQUAL_EQUAL => self.emitByteOp(.EQUAL),
+            .GREATER => self.emitByteOp(.GREATER),
+            .GREATER_EQUAL => self.emitBytesOps(.LESS, .NOT),
+            .LESS => self.emitByteOp(.LESS),
+            .LESS_EQUAL => self.emitBytesOps(.GREATER, .NOT),
             else => unreachable,
         }
     }
 
     pub fn expression(self: *Self) void {
         self.parsePrecedence(.ASSIGNMENT);
+    }
+
+    fn literal(self: *Self) void {
+        switch (self.previous.type) {
+            .FALSE => self.emitByteOp(.FALSE),
+            .NIL => self.emitByteOp(.NIL),
+            .TRUE => self.emitByteOp(.TRUE),
+            else => unreachable,
+        }
     }
 
     fn parsePrecedence(self: *Self, precedence: Precedence) void {

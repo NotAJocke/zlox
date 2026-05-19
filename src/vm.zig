@@ -16,7 +16,7 @@ pub const VM = struct {
     chunk: *Chunk = undefined,
     ip: [*]u8 = undefined,
     debug: bool = false,
-    stack: [STACK_MAX]Value = [_]Value{0} ** STACK_MAX,
+    stack: [STACK_MAX]Value = [_]Value{Value{ .numberVal = 0 }} ** STACK_MAX,
     stackTop: [*]Value = undefined,
 
     const Self = @This();
@@ -53,16 +53,53 @@ pub const VM = struct {
         return byte;
     }
 
-    fn binaryOp(self: *Self, op: OpCode) void {
-        const b = self.popStack();
-        const a = self.popStack();
+    fn binaryOp(self: *Self, op: OpCode) !void {
+        const x = self.popStack();
+        const y = self.popStack();
+
+        if (x != .numberVal or y != .numberVal) {
+            self.runtimeError("Operands must be numbers.", .{});
+            return VmError.Runtime;
+        }
+
+        const b = x.numberVal;
+        const a = y.numberVal;
 
         switch (op) {
-            .ADD => self.pushStack(a + b),
-            .SUBTRACT => self.pushStack(a - b),
-            .MULTIPLY => self.pushStack(a * b),
-            .DIVIDE => self.pushStack(a / b),
+            .ADD => self.pushStack(Value{ .numberVal = a + b }),
+            .SUBTRACT => self.pushStack(Value{ .numberVal = a - b }),
+            .MULTIPLY => self.pushStack(Value{ .numberVal = a * b }),
+            .DIVIDE => self.pushStack(Value{ .numberVal = a / b }),
+            .LESS => self.pushStack(Value{ .boolVal = b > a }),
+            .GREATER => self.pushStack(Value{ .boolVal = b < a }),
             else => unreachable,
+        }
+    }
+
+    fn peek(self: *Self, distance: usize) Value {
+        const index = @intFromPtr(self.stackTop) - 1 - distance;
+        return self.stackTop[index];
+    }
+
+    fn runtimeError(self: *Self, comptime format: []const u8, comptime args: anytype) void {
+        std.debug.print(format, args);
+        std.debug.print("\n", .{});
+
+        const ip_addr = @intFromPtr(self.ip);
+        const code_start = @intFromPtr(self.chunk.code.items.ptr);
+
+        const instruction = (ip_addr - code_start) - 1;
+        const line = self.chunk.getLine(instruction);
+
+        std.debug.print("[line {d}] in script\n", .{line});
+        self.resetStack();
+    }
+
+    fn isFalsey(value: Value) bool {
+        switch (value) {
+            .nil => return true,
+            .boolVal => |val| return !val,
+            else => return false,
         }
     }
 
@@ -91,12 +128,30 @@ pub const VM = struct {
                     const constant = self.chunk.constants.items[self.read_byte()];
                     self.pushStack(constant);
                 },
-                .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE => self.binaryOp(instruction),
+                .TRUE => self.pushStack(Value{ .boolVal = true }),
+                .FALSE => self.pushStack(Value{ .boolVal = false }),
+                .EQUAL => {
+                    const b = self.popStack();
+                    const a = self.popStack();
+                    self.pushStack(Value{ .boolVal = b.equals(a) });
+                },
+                .NIL => self.pushStack(Value.nil),
+                .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE, .GREATER, .LESS => try self.binaryOp(instruction),
+                .NOT => self.pushStack(Value{ .boolVal = isFalsey(self.popStack()) }),
                 .NEGATE => {
-                    self.pushStack(-self.popStack());
+                    switch (self.peek(0)) {
+                        .numberVal => |value| {
+                            _ = self.popStack();
+                            self.pushStack(Value{ .numberVal = -value });
+                        },
+                        else => {
+                            self.runtimeError("Operand must be a number", .{});
+                            return VmError.Runtime;
+                        },
+                    }
                 },
                 .RETURN => {
-                    std.debug.print("'{d}'\n", .{self.popStack()});
+                    std.debug.print("'{s}'\n", .{self.popStack().toString()});
                     return;
                 },
             }

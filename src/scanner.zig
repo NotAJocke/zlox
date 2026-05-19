@@ -127,7 +127,7 @@ pub const Scanner = struct {
                     _ = self.advance();
                     ttype = .LESS_EQUAL;
                 } else {
-                    ttype = .EQUAL;
+                    ttype = .LESS;
                 }
 
                 return self.makeToken(ttype);

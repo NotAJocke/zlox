@@ -4,10 +4,17 @@ const Value = @import("value.zig").Value;
 
 pub const OpCode = enum(u8) {
     CONSTANT,
+    NIL,
+    TRUE,
+    FALSE,
+    EQUAL,
+    GREATER,
+    LESS,
     ADD,
     SUBTRACT,
     MULTIPLY,
     DIVIDE,
+    NOT,
     NEGATE,
     RETURN,
 };
@@ -100,6 +107,30 @@ pub const Chunk = struct {
                 std.debug.print("{s}\n", .{"OP_RETURN"});
                 return offset + 1;
             },
+            .TRUE => {
+                std.debug.print("{s}\n", .{"OP_TRUE"});
+                return offset + 1;
+            },
+            .FALSE => {
+                std.debug.print("{s}\n", .{"OP_FALSE"});
+                return offset + 1;
+            },
+            .EQUAL => {
+                std.debug.print("{s}\n", .{"OP_EQUAL"});
+                return offset + 1;
+            },
+            .GREATER => {
+                std.debug.print("{s}\n", .{"OP_GREATER"});
+                return offset + 1;
+            },
+            .LESS => {
+                std.debug.print("{s}\n", .{"OP_LESS"});
+                return offset + 1;
+            },
+            .NIL => {
+                std.debug.print("{s}\n", .{"OP_NIL"});
+                return offset + 1;
+            },
             .ADD => {
                 std.debug.print("{s}\n", .{"OP_ADD"});
                 return offset + 1;
@@ -114,6 +145,10 @@ pub const Chunk = struct {
             },
             .DIVIDE => {
                 std.debug.print("{s}\n", .{"OP_DIVIDE"});
+                return offset + 1;
+            },
+            .NOT => {
+                std.debug.print("{s}\n", .{"OP_NOT"});
                 return offset + 1;
             },
             .NEGATE => {
