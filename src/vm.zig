@@ -35,15 +35,16 @@ pub const VM = struct {
         return self.stackTop[0];
     }
 
-    pub fn interpret(self: *Self, source: []const u8) VmError!void {
-        _ = self;
-        // self.resetStack();
+    pub fn interpret(self: *Self, gpa: std.mem.Allocator, source: []const u8) VmError!void {
+        self.resetStack();
+        var chunk: Chunk = .init(gpa);
+        defer chunk.deinit();
 
-        compile(source);
+        try compile(source, &chunk, self.debug);
 
-        // self.chunk = chunk;
-        // self.ip = chunk.code.items.ptr;
-        // return self.run();
+        self.chunk = &chunk;
+        self.ip = chunk.code.items.ptr;
+        return self.run();
     }
 
     fn read_byte(self: *Self) u8 {
@@ -66,6 +67,10 @@ pub const VM = struct {
     }
 
     fn run(self: *Self) VmError!void {
+        if (self.debug) {
+            std.debug.print("== exec ==", .{});
+        }
+
         while (true) {
             if (self.debug) {
                 std.debug.print("          ", .{});

@@ -16,23 +16,31 @@ pub const Chunk = struct {
     code: std.ArrayList(u8),
     constants: std.ArrayList(Value),
     lines: std.ArrayList(struct { line: u32, repeat: u32 }),
+    arena: std.heap.ArenaAllocator,
 
     const Self = @This();
 
-    pub const empty: Self = .{ .code = .empty, .constants = .empty, .lines = .empty };
+    // pub const empty: Self = .{ .code = .empty, .constants = .empty, .lines = .empty };
 
-    pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
-        self.code.deinit(alloc);
-        self.constants.deinit(alloc);
-        self.lines.deinit(alloc);
+    pub fn init(gpa: std.mem.Allocator) Self {
+        return Self{ .code = .empty, .constants = .empty, .lines = .empty, .arena = std.heap.ArenaAllocator.init(gpa) };
     }
 
-    pub fn write(self: *Self, alloc: std.mem.Allocator, code: OpCode, line: u32) !void {
-        try self.writeConstant(alloc, @intFromEnum(code), line);
+    pub fn deinit(self: *Self) void {
+        // self.code.deinit(alloc);
+        // self.constants.deinit(alloc);
+        // self.lines.deinit(alloc);
+        self.arena.deinit();
     }
 
-    pub fn writeConstant(self: *Self, alloc: std.mem.Allocator, constant: u8, line: u32) !void {
-        try self.code.append(alloc, constant);
+    pub fn write(self: *Self, code: OpCode, line: u32) void {
+        self.writeConstant(@intFromEnum(code), line);
+    }
+
+    pub fn writeConstant(self: *Self, constant: u8, line: u32) void {
+        const allocator = self.arena.allocator();
+
+        self.code.append(allocator, constant) catch @panic("Out of memory");
 
         if (self.lines.items.len > 0) {
             const last = &self.lines.items[self.lines.items.len - 1];
@@ -43,7 +51,7 @@ pub const Chunk = struct {
             }
         }
 
-        try self.lines.append(alloc, .{ .line = line, .repeat = 1 });
+        self.lines.append(allocator, .{ .line = line, .repeat = 1 }) catch @panic("Out of memory");
     }
 
     pub fn getLine(self: *Self, code_index: usize) u32 {
@@ -60,9 +68,9 @@ pub const Chunk = struct {
         unreachable;
     }
 
-    pub fn addConstant(self: *Self, alloc: std.mem.Allocator, value: Value) !usize {
+    pub fn addConstant(self: *Self, value: Value) usize {
         const index = self.constants.items.len;
-        try self.constants.append(alloc, value);
+        self.constants.append(self.arena.allocator(), value) catch @panic("Out of memory");
         return index;
     }
 
